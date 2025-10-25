@@ -2,10 +2,9 @@ import socket
 from contextlib import closing
 from typing import TYPE_CHECKING, Any
 
-from parsl.executors import WorkQueueExecutor
 from parsl.executors.base import ParslExecutor
 from parsl.launchers import SrunLauncher
-from parsl.providers import LocalProvider, SlurmProvider
+from parsl.providers import SlurmProvider
 
 try:
     from parsl.providers.base import ExecutionProvider
@@ -13,10 +12,11 @@ except ImportError:
     from parsl.providers.provider_base import ExecutionProvider  # type: ignore
 
 from lsst.ctrl.bps.parsl.configuration import get_bps_config_value, get_workflow_name
-from lsst.ctrl.bps.parsl.site import SiteConfig
+from lsst.ctrl.bps.parsl.sites import WorkQueue
 
 if TYPE_CHECKING:
     from ctrl.bps.parsl.job import ParslJob
+
 
 __all__ = ("SlurmWorkQueue",)
 
@@ -32,23 +32,10 @@ def get_free_port():
         return port
 
 
-class WorkQueue(SiteConfig):
-    """Base class configuraton for `WorkQueueExecutor`.
+class SlurmWorkQueue(WorkQueue):
+    """Configuration for a `WorkQueueExecutor` that uses a `SlurmProvider`
+    to manage resources.
 
-    Subclasses must provide implementations for ``.get_executors``
-    and ``.select_executor``.  In ``.get_executors``, the site-specific
-    `ExecutionProvider` must be defined.
-
-    Parameters
-    ----------
-    *args : `~typing.Any`
-        Parameters forwarded to base class constructor.
-    **kwargs : `~typing.Any`
-        Keyword arguments passed to base class constructor, augmented by
-        the ``add_resources`` argument.
-
-    Notes
-    -----
     The following BPS configuration parameters are recognized, overriding the
     defaults:
 
@@ -62,12 +49,9 @@ class WorkQueue(SiteConfig):
       will make in case of task failures.  Set to ``None`` to have work_queue
       retry forever; set to ``1`` to have retries managed by Parsl.
       Default: ``1``
+    - ``nodes_per_block`` (`int`): The number of allocated nodes.
+      Default: ``1``
     """
-
-    def __init__(self, *args, **kwargs):
-        # Have BPS-defined resource requests for each job passed to work_queue.
-        kwargs["add_resources"] = True
-        super().__init__(*args, **kwargs)
 
     def make_executor(
         self,
@@ -100,99 +84,9 @@ class WorkQueue(SiteConfig):
         port = get_bps_config_value(self.site, "port", int, port)
         if port is None:
             port = get_free_port()
-        worker_options = get_bps_config_value(self.site, "worker_options", str, worker_options)
-        max_retries = get_bps_config_value(self.site, "wq_max_retries", int, wq_max_retries)
-        return WorkQueueExecutor(
-            label=label,
-            provider=provider,
-            port=port,
-            worker_options=worker_options,
-            max_retries=max_retries,
-            shared_fs=True,
-            autolabel=False,
-        )
-
-    def get_executors(self) -> list[ParslExecutor]:
-        return [self.make_executor("work_queue", self.get_provider())]
-
-    def select_executor(self, job: "ParslJob") -> str:
-        """Get the ``label`` of the executor to use to execute a job
-
-        Parameters
-        ----------
-        job : `ParslJob`
-            Job to be executed.
-
-        Returns
-        -------
-        label : `str`
-            Label of executor to use to execute ``job``.
-        """
-        return "work_queue"
-
-
-class LocalSrunWorkQueue(WorkQueue):
-    """Configuration for a `WorkQueueExecutor` that uses a `LocalProvider`
-    to manage resources.
-
-    This can be used directly as the site configuration within a
-    multi-node allocation when Slurm is available.  For running on a
-    single node, e.g., a laptop, a `SingleNodeLauncher` is used, and
-    Slurm need not be available.
-
-    The following BPS configuration parameters are recognized, overriding the
-    defaults:
-
-    - ``port`` (`int`): The port used by work_queue. Default: ``None``.
-      If ``None``, then find a free port.
-    - ``worker_options (`str`): Extra options to pass to work_queue workers.
-      A typical option specifies the memory available per worker, e.g.,
-      ``"--memory=90000"``, which sets the available memory to 90 GB.
-      Default: ``""``
-    - ``wq_max_retries`` (`int`): The number of retries that work_queue
-      will make in case of task failures.  Set to ``None`` to have work_queue
-      retry forever; set to ``1`` to have retries managed by Parsl. Default:
-      ``1``.
-    - ``nodes_per_block`` (`int`): The number of allocated nodes.
-      Default: ``1``.
-    """
-
-    def get_provider(self) -> ExecutionProvider:
-        """Return a LocalProvider."""
-        nodes = get_bps_config_value(self.site, "nodes_per_block", int, 1)
-        provider_options = {
-            "nodes_per_block": nodes,
-            "init_blocks": 0,
-            "min_blocks": 0,
-            "max_blocks": 1,
-            "parallelism": 0,
-            "cmd_timeout": 300,
-        }
-        if nodes > 1:
-            provider_options["launcher"] = SrunLauncher(overrides="-K0 -k --cpu-bind=none")
-        return LocalProvider(**provider_options)
-
-
-class SlurmWorkQueue(WorkQueue):
-    """Configuration for a `WorkQueueExecutor` that uses a `SlurmProvider`
-    to manage resources.
-
-    The following BPS configuration parameters are recognized, overriding the
-    defaults:
-
-    - ``port`` (`int`): The port used by work_queue. Default: ``None``.
-      If ``None``, then find a free port.
-    - ``worker_options (`str`): Extra options to pass to work_queue workers.
-      A typical option specifies the memory available per worker, e.g.,
-      ``"--memory=90000"``, which sets the available memory to 90 GB.
-      Default: ``""``
-    - ``wq_max_retries`` (`int`): The number of retries that work_queue
-      will make in case of task failures.  Set to ``None`` to have work_queue
-      retry forever; set to ``1`` to have retries managed by Parsl.
-      Default: ``1``
-    - ``nodes_per_block`` (`int`): The number of allocated nodes.
-      Default: ``1``
-    """
+        return super().make_executor(label, provider, port=port,
+                                     worker_options=worker_options,
+                                     wq_max_retries=wq_max_retries)
 
     def get_provider(
         self,
@@ -250,3 +144,21 @@ class SlurmWorkQueue(WorkQueue):
             **(provider_options or {}),
         )
         return provider
+
+    def get_executors(self) -> list[ParslExecutor]:
+        return [self.make_executor("work_queue", self.get_provider())]
+
+    def select_executor(self, job: "ParslJob") -> str:
+        """Get the ``label`` of the executor to use to execute a job
+
+        Parameters
+        ----------
+        job : `ParslJob`
+            Job to be executed.
+
+        Returns
+        -------
+        label : `str`
+            Label of executor to use to execute ``job``.
+        """
+        return "work_queue"
