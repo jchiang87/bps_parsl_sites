@@ -107,6 +107,7 @@ class SlurmWorkQueue(WorkQueue):
         walltime = get_bps_config_value(self.site, "walltime", str, walltime, required=True)
         mem_per_node = get_bps_config_value(self.site, "mem_per_node", int, mem_per_node)
         qos = get_bps_config_value(self.site, "qos", str, qos)
+        constraint = get_bps_config_value(self.site, "constraint", str, constraint)
         singleton = get_bps_config_value(self.site, "singleton", bool, singleton)
         exclusive = get_bps_config_value(self.site, "exclusive", bool, exclusive)
         scheduler_options = get_bps_config_value(self.site, "scheduler_options", str, scheduler_options)
