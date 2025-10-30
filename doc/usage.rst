@@ -69,22 +69,21 @@ Here are notes on some of the entries in this configuration block:
   the `local` `computeSite`.
 
 **site.work_queue**
-
-  * **nodes_per_block**  The number of full batch nodes to allocate for
+  * **nodes_per_block**:  The number of full batch nodes to allocate for
     running the workflow jobs.
-  * **walltime**  The walltime request for each batch submission. This must
+  * **walltime**:  The walltime request for each batch submission. This must
     have the format "hours:minutes:seconds" since parsl tokenizes this string
     into three fields and will raise an error if it doesn't find all three.
-  * **exclusive** Whether exclusive nodes are used.  This should probably be
+  * **exclusive**:  Whether exclusive nodes are used.  This should probably be
     set to `true` for running on Perlmutter.
-  * **qos**  This sets the job's quality-of-service.  Set this to `debug`
+  * **qos**:  This sets the job's quality-of-service.  Set this to `debug`
     for running in the debug queue, to `regular` for the standard charge
     factor, etc..
-  * **constraint** Set this to `cpu`.
-  * **scheduler_options** These are additional entries, not covered by the
+  * **constraint**:  Set this to `cpu`.
+  * **scheduler_options**:  These are additional entries, not covered by the
     above parameters, to add to the sbatch submission script generated
     by parsl.
-  * **worker_options** These are options to pass to the `WorkQueueExecutor`
+  * **worker_options**:  These are options to pass to the `WorkQueueExecutor`
     to tell it what resources are available for running pipeline jobs.
     Perlmutter nodes have 512GB of RAM available, so passing `--memory=480000`
     here reserves 32GB for non-pipeline processes running on the node.
